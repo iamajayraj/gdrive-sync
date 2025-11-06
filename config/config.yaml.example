@@ -2,12 +2,12 @@
 
 # Google Drive settings
 google_drive:
-  # Path to the credentials file (will be generated during OAuth2 flow)
-  credentials_file: "config/credentials.json"
-  # Path to the token file (will be generated during OAuth2 flow)
-  token_file: "config/token.json"
+  # Path to the service account key file
+  service_account_file: "config/service-account-key.json"
+  
   # The ID of the folder to monitor (can be obtained from the Google Drive URL)
   folder_id: "your_folder_id_here"
+  
   # Polling interval in seconds
   polling_interval: 300  # 5 minutes
 

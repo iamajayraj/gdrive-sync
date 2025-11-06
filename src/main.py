@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Google Drive Sync and Dify API Integration
+"""Google Drive Sync and Dify API Integration
 
 This application monitors a Google Drive folder (and its subfolders) for new or
 modified files and pushes them to the Dify API.
@@ -17,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.utils.config import Config
 from src.utils.logger import setup_logger
+from src.drive.service_drive_client import ServiceDriveClient
 
 
 def parse_arguments():
@@ -57,7 +57,15 @@ def main():
         config = Config(config_path)
         logger.info(f"Configuration loaded from {config_path}")
         
-        # TODO: Implement the main application logic
+        # Initialize Google Drive client
+        drive_client = ServiceDriveClient(config)
+        if not drive_client.connect():
+            logger.error("Failed to connect to Google Drive API")
+            sys.exit(1)
+        
+        logger.info("Connected to Google Drive API successfully")
+        
+        # TODO: Implement the file change detection and Dify API integration
         logger.info("Application started successfully")
         
     except Exception as e:
