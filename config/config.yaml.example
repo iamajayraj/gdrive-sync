@@ -27,6 +27,17 @@ database:
   # Maximum number of sync history records to keep per file
   max_history_per_file: 100
 
+# Download settings
+downloads:
+  # Path to the directory where files will be downloaded
+  path: "data/downloads"
+  # Maximum file size to download (in MB)
+  max_size_mb: 100
+  # Interval to clean up old downloaded files (in seconds)
+  cleanup_interval: 3600  # 1 hour
+  # Maximum age of downloaded files before cleanup (in seconds)
+  max_age: 86400  # 24 hours
+
 # Logging settings
 logging:
   # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)

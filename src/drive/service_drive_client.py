@@ -150,6 +150,19 @@ class ServiceDriveClient:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         try:
+            # Get file metadata to check if it's a Google Workspace file
+            file_metadata = self.get_file_metadata(file_id)
+            if not file_metadata:
+                logger.error(f"Could not get metadata for file {file_id}")
+                return False
+            
+            mime_type = file_metadata.get('mimeType', '')
+            
+            # Handle Google Workspace files (Docs, Sheets, Slides)
+            if mime_type.startswith('application/vnd.google-apps.'):
+                return self._export_google_workspace_file(file_id, mime_type, output_path)
+            
+            # Regular file download
             request = self.service.files().get_media(fileId=file_id)
             
             with open(output_path, 'wb') as f:
@@ -164,6 +177,63 @@ class ServiceDriveClient:
         
         except HttpError as error:
             logger.error(f"Error downloading file {file_id}: {error}")
+            return False
+    
+    def _export_google_workspace_file(self, file_id, mime_type, output_path):
+        """
+        Export a Google Workspace file to a downloadable format.
+        
+        Args:
+            file_id (str): The ID of the file to export.
+            mime_type (str): The MIME type of the Google Workspace file.
+            output_path (Path): The path where the exported file will be saved.
+            
+        Returns:
+            bool: True if export is successful, False otherwise.
+        """
+        try:
+            # Define export formats based on the Google Workspace file type
+            export_formats = {
+                'application/vnd.google-apps.document': 'application/pdf',
+                'application/vnd.google-apps.spreadsheet': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.google-apps.presentation': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                'application/vnd.google-apps.drawing': 'application/pdf',
+                'application/vnd.google-apps.script': 'application/vnd.google-apps.script+json'
+            }
+            
+            # Get the appropriate export format
+            export_mime_type = export_formats.get(mime_type)
+            
+            if not export_mime_type:
+                logger.error(f"Unsupported Google Workspace file type: {mime_type}")
+                return False
+            
+            # Update file extension based on export format
+            extension_map = {
+                'application/pdf': '.pdf',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+                'application/vnd.google-apps.script+json': '.json'
+            }
+            
+            new_extension = extension_map.get(export_mime_type, '.pdf')
+            new_output_path = output_path.with_suffix(new_extension)
+            
+            # Export the file
+            request = self.service.files().export_media(fileId=file_id, mimeType=export_mime_type)
+            
+            with open(new_output_path, 'wb') as f:
+                downloader = MediaIoBaseDownload(f, request)
+                done = False
+                while not done:
+                    status, done = downloader.next_chunk()
+                    logger.debug(f"Export progress: {int(status.progress() * 100)}%")
+            
+            logger.info(f"Google Workspace file {file_id} exported to {new_output_path}")
+            return True
+            
+        except HttpError as error:
+            logger.error(f"Error exporting Google Workspace file {file_id}: {error}")
             return False
     
     def get_file_metadata(self, file_id):
