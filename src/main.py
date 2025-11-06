@@ -79,21 +79,32 @@ def handle_new_file(file: Dict[str, Any]) -> None:
         file_info = file_processor.get_file_info(download_path)
         logger.info(f"Downloaded file: {file_info['name']} ({file_info['size']} bytes)")
         
-        # Upload to Dify API if available
-        if file_uploader:
-            logger.info(f"Uploading file to Dify API: {file['name']}")
-            success, response = file_uploader.upload_file(file, download_path)
-            
-            if success:
-                document_id = response.get('id', 'unknown')
-                logger.info(f"File uploaded successfully to Dify API. Document ID: {document_id}")
+        try:
+            # Upload to Dify API if available
+            if file_uploader:
+                logger.info(f"Uploading file to Dify API: {file['name']}")
+                success, response = file_uploader.upload_file(file, download_path)
+                
+                if success:
+                    document_id = response.get('id', 'unknown')
+                    logger.info(f"File uploaded successfully to Dify API. Document ID: {document_id}")
+                    
+                    # Delete the file after successful upload
+                    if download_path.exists():
+                        download_path.unlink()
+                        # Remove from tracking dictionary
+                        download_manager.remove_tracking(file['id'])
+                        logger.info(f"Deleted downloaded file after successful upload: {download_path}")
+                else:
+                    error = response.get('error', 'unknown error')
+                    logger.error(f"Failed to upload file to Dify API: {error}")
             else:
-                error = response.get('error', 'unknown error')
-                logger.error(f"Failed to upload file to Dify API: {error}")
-        else:
-            logger.warning("Dify API integration is disabled. Skipping upload.")
+                logger.warning("Dify API integration is disabled. Skipping upload.")
+        except Exception as e:
+            logger.exception(f"Error during file processing or upload: {e}")
     else:
         logger.error(f"Failed to download file: {file['name']} ({file['id']})")
+
 
 
 def handle_modified_file(file: Dict[str, Any]) -> None:
@@ -112,21 +123,32 @@ def handle_modified_file(file: Dict[str, Any]) -> None:
         file_info = file_processor.get_file_info(download_path)
         logger.info(f"Downloaded modified file: {file_info['name']} ({file_info['size']} bytes)")
         
-        # Upload to Dify API if available
-        if file_uploader:
-            logger.info(f"Uploading modified file to Dify API: {file['name']}")
-            success, response = file_uploader.upload_file(file, download_path)
-            
-            if success:
-                document_id = response.get('id', 'unknown')
-                logger.info(f"Modified file uploaded successfully to Dify API. Document ID: {document_id}")
+        try:
+            # Upload to Dify API if available
+            if file_uploader:
+                logger.info(f"Uploading modified file to Dify API: {file['name']}")
+                success, response = file_uploader.upload_file(file, download_path)
+                
+                if success:
+                    document_id = response.get('id', 'unknown')
+                    logger.info(f"Modified file uploaded successfully to Dify API. Document ID: {document_id}")
+                    
+                    # Delete the file after successful upload
+                    if download_path.exists():
+                        download_path.unlink()
+                        # Remove from tracking dictionary
+                        download_manager.remove_tracking(file['id'])
+                        logger.info(f"Deleted downloaded file after successful upload: {download_path}")
+                else:
+                    error = response.get('error', 'unknown error')
+                    logger.error(f"Failed to upload modified file to Dify API: {error}")
             else:
-                error = response.get('error', 'unknown error')
-                logger.error(f"Failed to upload modified file to Dify API: {error}")
-        else:
-            logger.warning("Dify API integration is disabled. Skipping upload.")
+                logger.warning("Dify API integration is disabled. Skipping upload.")
+        except Exception as e:
+            logger.exception(f"Error during file processing or upload: {e}")
     else:
         logger.error(f"Failed to download modified file: {file['name']} ({file['id']})")
+
 
 
 def handle_deleted_file(file: Dict[str, Any]) -> None:
@@ -143,6 +165,8 @@ def handle_deleted_file(file: Dict[str, Any]) -> None:
         logger.info(f"Removing local copy of deleted file: {local_path}")
         try:
             local_path.unlink()
+            # Remove from tracking dictionary
+            download_manager.remove_tracking(file['id'])
         except Exception as e:
             logger.error(f"Error removing local file {local_path}: {e}")
     

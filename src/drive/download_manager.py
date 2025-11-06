@@ -141,8 +141,7 @@ class DownloadManager:
         return results
     
     def get_downloaded_file(self, file_id: str) -> Optional[Path]:
-        """
-        Get the path to a previously downloaded file.
+        """Get the path to a downloaded file.
         
         Args:
             file_id: The ID of the file.
@@ -150,15 +149,17 @@ class DownloadManager:
         Returns:
             Path to the downloaded file or None if not found.
         """
-        if file_id in self.downloaded_files:
-            path = self.downloaded_files[file_id]
-            if path.exists():
-                return path
-            else:
-                # File was deleted, remove from tracking
-                del self.downloaded_files[file_id]
+        return self.downloaded_files.get(file_id)
         
-        return None
+    def remove_tracking(self, file_id: str) -> None:
+        """Remove a file from the tracking dictionary.
+        
+        Args:
+            file_id: The ID of the file to remove.
+        """
+        if file_id in self.downloaded_files:
+            del self.downloaded_files[file_id]
+            logger.debug(f"Removed file {file_id} from tracking dictionary")
     
     def cleanup_old_files(self, max_age_seconds: int = 86400) -> int:
         """
