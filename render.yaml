@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: gdrive-sync
-    env: python
-    buildCommand: pip install -r requirements.txt
-    plan: free
