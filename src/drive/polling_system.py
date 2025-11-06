@@ -159,7 +159,18 @@ class PollingSystem:
             self.last_poll_time = datetime.now()
             
             # Detect changes
-            new_files, modified_files, deleted_files = self.change_detector.detect_changes()
+            try:
+                new_files, modified_files, deleted_files = self.change_detector.detect_changes()
+            except Exception as e:
+                # Handle SSL errors and other connection issues
+                if 'SSL' in str(e) or 'socket' in str(e) or 'connection' in str(e).lower():
+                    logger.error(f"Network or SSL error during polling: {e}")
+                    logger.info("Returning empty results due to connection error")
+                    # Return empty lists instead of None to avoid unpacking errors
+                    return [], [], []
+                else:
+                    # Re-raise other exceptions
+                    raise
             
             # Trigger callbacks
             self._trigger_callbacks(self.EVENT_NEW_FILE, new_files)
@@ -170,7 +181,8 @@ class PollingSystem:
             return new_files, modified_files, deleted_files
         except Exception as e:
             logger.error(f"Error in manual polling: {e}")
-            return None
+            # Return empty lists instead of None to avoid unpacking errors
+            return [], [], []
     
     def register_callback(self, event_type: str, callback: Union[CallbackFunc, PollCompleteCallbackFunc]) -> bool:
         """

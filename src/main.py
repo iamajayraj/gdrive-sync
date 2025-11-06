@@ -463,12 +463,16 @@ def main() -> None:
                     operation_name="poll_for_changes"
                 )
                 
-                if success:
-                    new_files, modified_files, deleted_files = result
-                    logger.info(
-                        f"Poll complete: {len(new_files)} new, {len(modified_files)} modified, "
-                        f"{len(deleted_files)} deleted"
-                    )
+                if success and result is not None:
+                    try:
+                        new_files, modified_files, deleted_files = result
+                        logger.info(
+                            f"Poll complete: {len(new_files)} new, {len(modified_files)} modified, "
+                            f"{len(deleted_files)} deleted"
+                        )
+                    except (TypeError, ValueError) as e:
+                        logger.error(f"Error processing polling results: {e}")
+                        logger.debug(f"Received result: {result}")
                 else:
                     logger.error(f"Polling failed: {exc}")
             
