@@ -28,7 +28,7 @@ class ServiceDriveClient:
         """
         self.config = config
         self.folder_id = config.get('google_drive.folder_id')
-        service_account_file = config.get('google_drive.service_account_file')
+        service_account_file = config.get_service_account_path()
         
         self.auth = DriveServiceAuth(service_account_file)
         self.service = None
