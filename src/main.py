@@ -27,6 +27,8 @@ from src.drive.polling_system import PollingSystem
 from src.drive.download_manager import DownloadManager
 from src.dify.dify_client import DifyClient
 from src.dify.file_uploader import FileUploader
+from src.scheduler import Scheduler
+from src.error_handler import ErrorHandler
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -58,6 +60,16 @@ def parse_arguments() -> argparse.Namespace:
         '--poll-now',
         action='store_true',
         help='Poll for changes immediately and exit'
+    )
+    parser.add_argument(
+        '--no-scheduler',
+        action='store_true',
+        help='Disable the scheduler and use the legacy polling loop'
+    )
+    parser.add_argument(
+        '--run-once',
+        action='store_true',
+        help='Run the sync process once and exit (same as --poll-now)'
     )
     return parser.parse_args()
 
@@ -202,7 +214,7 @@ def handle_poll_complete(
     )
 
 
-def setup_components(config_path: Path) -> Tuple[Config, DatabaseManager, ServiceDriveClient, ChangeDetector, PollingSystem, DownloadManager, FileProcessor, DifyClient, FileUploader]:
+def setup_components(config_path: Path) -> Tuple[Config, DatabaseManager, ServiceDriveClient, ChangeDetector, PollingSystem, DownloadManager, FileProcessor, DifyClient, FileUploader, Scheduler, ErrorHandler]:
     """Set up application components.
     
     Args:
@@ -219,6 +231,8 @@ def setup_components(config_path: Path) -> Tuple[Config, DatabaseManager, Servic
         - FileProcessor: File processor for handling different file types.
         - DifyClient: Dify API client.
         - FileUploader: File uploader for Dify API.
+        - Scheduler: Task scheduler for running operations at regular intervals.
+        - ErrorHandler: Error handling and recovery mechanisms.
         
     Raises:
         FileNotFoundError: If the configuration file is not found.
@@ -280,7 +294,18 @@ def setup_components(config_path: Path) -> Tuple[Config, DatabaseManager, Servic
         file_uploader = None
         logger.warning("File uploader disabled due to missing Dify API configuration")
     
-    return config, db_manager, drive_client, change_detector, polling_system, download_manager, file_processor, dify_client, file_uploader
+    # Initialize scheduler
+    scheduler = Scheduler()
+    logger.info("Task scheduler initialized")
+    
+    # Initialize error handler
+    max_retries = config.get('scheduler.error_recovery.max_retries', 3)
+    retry_delay = config.get('scheduler.error_recovery.retry_delay_seconds', 30)
+    continue_on_error = config.get('scheduler.error_recovery.continue_on_error', True)
+    error_handler = ErrorHandler(max_retries, retry_delay, continue_on_error)
+    logger.info(f"Error handler initialized with max_retries={max_retries}, retry_delay={retry_delay}s")
+    
+    return config, db_manager, drive_client, change_detector, polling_system, download_manager, file_processor, dify_client, file_uploader, scheduler, error_handler
 
 
 def register_event_handlers(polling_system: PollingSystem) -> None:
@@ -304,14 +329,39 @@ def setup_signal_handlers(polling_system: PollingSystem, db_manager: DatabaseMan
     """
     def signal_handler(sig, frame):
         logger.info("Shutting down...")
-        polling_system.stop()
-        db_manager.close()
+        
+        # Stop the polling system if it's running
+        if polling_system:
+            polling_system.stop()
+            logger.info("Polling system stopped")
+        
+        # Stop the scheduler if it's running
+        if scheduler is not None:
+            scheduler.stop()
+            logger.info("Scheduler stopped")
+        
+        # Close the database connection
+        if db_manager:
+            db_manager.close()
+            logger.info("Database connection closed")
         
         # Clean up downloaded files
         if download_manager is not None:
             logger.info("Cleaning up downloaded files...")
             download_manager.clear_downloads()
+            logger.info("Downloaded files cleaned up")
         
+        # Log error statistics if available
+        if error_handler is not None:
+            error_stats = error_handler.get_error_stats()
+            if error_stats:
+                logger.info("Error statistics during this run:")
+                for op_name, stats in error_stats.items():
+                    logger.info(f"  {op_name}: {stats['count']} errors, last error: {stats['last_error']}")
+            else:
+                logger.info("No errors occurred during this run")
+                
+        logger.info("Shutdown complete")
         sys.exit(0)
     
     signal.signal(signal.SIGINT, signal_handler)
@@ -323,11 +373,13 @@ download_manager: Optional[DownloadManager] = None
 file_processor: Optional[FileProcessor] = None
 file_uploader: Optional[FileUploader] = None
 dify_client: Optional[DifyClient] = None
+scheduler: Optional[Scheduler] = None
+error_handler: Optional[ErrorHandler] = None
 
 
 def main() -> None:
     """Main entry point for the application."""
-    global download_manager, file_processor, file_uploader, dify_client
+    global download_manager, file_processor, file_uploader, dify_client, scheduler, error_handler
     
     args = parse_arguments()
     
@@ -342,12 +394,13 @@ def main() -> None:
             logger.error(f"Configuration file not found: {config_path}")
             sys.exit(1)
             
-        config, db_manager, drive_client, change_detector, polling_system, download_manager, file_processor, dify_client, file_uploader = setup_components(config_path)
+        config, db_manager, drive_client, change_detector, polling_system, download_manager, file_processor, dify_client, file_uploader, scheduler, error_handler = setup_components(config_path)
         
         # Register event handlers
         register_event_handlers(polling_system)
         
-        if args.poll_now:
+        # Handle run-once mode (same as poll-now)
+        if args.poll_now or args.run_once:
             # Poll once and exit
             logger.info("Polling for changes...")
             new_files, modified_files, deleted_files = polling_system.poll_now()
@@ -360,35 +413,101 @@ def main() -> None:
             download_manager.cleanup_old_files()
             return
         
-        # Start polling system
-        polling_system.start()
-        polling_interval = config.get('google_drive.polling_interval', 300)
-        logger.info(f"Polling system started with interval of {polling_interval} seconds")
-        
         # Set up signal handlers
         setup_signal_handlers(polling_system, db_manager)
         
-        logger.info("Application started successfully. Press Ctrl+C to exit.")
+        # Get configuration values
+        polling_interval = config.get('google_drive.polling_interval', 300)
+        cleanup_interval = config.get('downloads.cleanup_interval', 3600)  # Default: 1 hour
         
-        # Keep the main thread alive
-        try:
-            # Periodically clean up old downloaded files
-            cleanup_interval = config.get('downloads.cleanup_interval', 3600)  # Default: 1 hour
-            last_cleanup = time.time()
+        # Get scheduler settings
+        scheduler_enabled = config.get('scheduler.enabled', True)
+        scheduler_polling_interval = config.get('scheduler.polling_interval', polling_interval)
+        scheduler_cleanup_interval = config.get('scheduler.cleanup_interval', cleanup_interval)
+        
+        # Use the scheduler or legacy polling system based on user preference and config
+        if args.no_scheduler or not scheduler_enabled:
+            # Legacy polling system
+            logger.info("Using legacy polling system (scheduler disabled)")
+            polling_system.start()
+            logger.info(f"Polling system started with interval of {polling_interval} seconds")
             
-            while True:
-                current_time = time.time()
+            logger.info("Application started successfully. Press Ctrl+C to exit.")
+            
+            # Keep the main thread alive
+            try:
+                last_cleanup = time.time()
                 
-                # Clean up old files if needed
-                if current_time - last_cleanup > cleanup_interval:
-                    download_manager.cleanup_old_files()
-                    last_cleanup = current_time
+                while True:
+                    current_time = time.time()
+                    
+                    # Clean up old files if needed
+                    if current_time - last_cleanup > cleanup_interval:
+                        download_manager.cleanup_old_files()
+                        last_cleanup = current_time
+                    
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                logger.info("Keyboard interrupt received. Shutting down...")
+                polling_system.stop()
+                db_manager.close()
+        else:
+            # Use the scheduler
+            logger.info("Using task scheduler for orchestration")
+            
+            # Define the poll function
+            def poll_for_changes():
+                logger.info("Scheduled polling for changes...")
+                success, result, exc = error_handler.execute_with_retry(
+                    polling_system.poll_now,
+                    operation_name="poll_for_changes"
+                )
                 
-                time.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("Keyboard interrupt received. Shutting down...")
-            polling_system.stop()
-            db_manager.close()
+                if success:
+                    new_files, modified_files, deleted_files = result
+                    logger.info(
+                        f"Poll complete: {len(new_files)} new, {len(modified_files)} modified, "
+                        f"{len(deleted_files)} deleted"
+                    )
+                else:
+                    logger.error(f"Polling failed: {exc}")
+            
+            # Define the cleanup function
+            def cleanup_downloads():
+                logger.info("Scheduled cleanup of downloaded files...")
+                success, result, exc = error_handler.execute_with_retry(
+                    download_manager.cleanup_old_files,
+                    operation_name="cleanup_downloads"
+                )
+                
+                if success:
+                    num_deleted = result
+                    logger.info(f"Cleaned up {num_deleted} old files")
+                else:
+                    logger.error(f"Cleanup failed: {exc}")
+            
+            # Add tasks to the scheduler
+            scheduler.add_task('poll', poll_for_changes, scheduler_polling_interval)
+            scheduler.add_task('cleanup', cleanup_downloads, scheduler_cleanup_interval)
+            
+            # Start the scheduler
+            scheduler.start()
+            logger.info(f"Scheduler started with polling interval of {scheduler_polling_interval} seconds")
+            logger.info(f"File cleanup scheduled every {scheduler_cleanup_interval} seconds")
+            
+            logger.info("Application started successfully. Press Ctrl+C to exit.")
+            
+            # Run initial poll
+            poll_for_changes()
+            
+            # Keep the main thread alive
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                logger.info("Keyboard interrupt received. Shutting down...")
+                scheduler.stop()
+                db_manager.close()
         
     except FileNotFoundError as e:
         logger.error(str(e))

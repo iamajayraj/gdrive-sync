@@ -1,53 +1,56 @@
-# Google Drive Sync Configuration
-
-# Google Drive settings
+# Google Drive configuration
 google_drive:
-  # Path to the service account key file
-  service_account_file: "config/service-account-key.json"
-  
-  # The ID of the folder to monitor (can be obtained from the Google Drive URL)
-  folder_id: "your_folder_id_here"
-  
-  # Polling interval in seconds
-  polling_interval: 300  # 5 minutes
+  # Path to the service account JSON key file
+  service_account_file: "path/to/service-account-key.json"
+  # Google Drive folder ID to monitor
+  folder_id: "your-folder-id"
+  # Polling interval in seconds (default: 300 seconds = 5 minutes)
+  polling_interval: 300
 
-# Dify API settings
-dify:
-  # API endpoint
-  api_url: "https://api.dify.ai/v1/datasets/{dataset_id}/document/create-by-file"
-  # Your dataset ID
-  dataset_id: "your_dataset_id_here"
-  # Your API key
-  api_key: "your_api_key_here"
-
-# Database settings
+# Database configuration
 database:
   # Path to the SQLite database file
   path: "data/file_metadata.db"
-  # Maximum number of sync history records to keep per file
-  max_history_per_file: 100
+
+# Dify API configuration
+dify:
+  # Dify API URL template
+  api_url: "https://api.dify.ai/v1/datasets/{dataset_id}/document/create-by-file"
+  # Dify dataset ID
+  dataset_id: "your-dataset-id"
+  # Dify API key
+  api_key: "your-api-key"
+  # Maximum file size in MB
+  max_file_size_mb: 20
+  # Maximum number of retries for API calls
+  max_retries: 3
+  # Delay between retries in seconds
+  retry_delay_seconds: 5
 
 # Download settings
 downloads:
-  # Path to the directory where files will be downloaded
+  # Path to store downloaded files
   path: "data/downloads"
-  # Maximum file size to download (in MB)
-  max_size_mb: 100
-  # Interval to clean up old downloaded files (in seconds)
-  cleanup_interval: 3600  # 1 hour
-  # Maximum age of downloaded files before cleanup (in seconds)
-  max_age: 86400  # 24 hours
+  # Maximum file size in MB (0 = no limit)
+  max_file_size_mb: 0
+  # Cleanup interval in seconds (default: 3600 seconds = 1 hour)
+  cleanup_interval: 3600
+  # Maximum age of downloaded files in seconds (default: 86400 seconds = 24 hours)
+  max_age_seconds: 86400
 
-# Logging settings
-logging:
-  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-  level: "INFO"
-  # Path to the log file
-  file: "logs/gdrive_sync.log"
-
-# Application settings
-app:
-  # Temporary directory for downloaded files
-  temp_dir: "temp"
-  # Maximum file size to download (in bytes)
-  max_file_size: 104857600  # 100MB
+# Scheduler settings
+scheduler:
+  # Enable or disable the scheduler (default: true)
+  enabled: true
+  # Polling task interval in seconds (default: use google_drive.polling_interval)
+  polling_interval: 300
+  # Cleanup task interval in seconds (default: use downloads.cleanup_interval)
+  cleanup_interval: 3600
+  # Error recovery settings
+  error_recovery:
+    # Maximum number of retries for failed tasks
+    max_retries: 3
+    # Delay between retries in seconds
+    retry_delay_seconds: 30
+    # Whether to continue other tasks when one fails
+    continue_on_error: true
