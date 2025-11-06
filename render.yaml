@@ -2,42 +2,5 @@ services:
   - type: worker
     name: gdrive-sync
     env: python
-    runtime: python3
-    region: oregon
     buildCommand: pip install -r requirements.txt
     startCommand: python src/main.py
-    plan: starter
-    autoDeploy: true
-    envVars:
-      - key: PYTHONUNBUFFERED
-        value: "true"
-      - key: GDRIVE_SYNC_LOG_LEVEL
-        value: INFO
-      - key: GDRIVE_SYNC_GOOGLE_DRIVE_POLLING_INTERVAL
-        value: "300"
-      - key: GDRIVE_SYNC_DOWNLOADS_PATH
-        value: "/tmp/downloads"
-      - key: GDRIVE_SYNC_DATABASE_PATH
-        value: "/tmp/file_metadata.db"
-      - key: GDRIVE_SYNC_DOWNLOADS_CLEANUP_INTERVAL
-        value: "3600"
-      - key: GDRIVE_SYNC_DOWNLOADS_MAX_AGE_SECONDS
-        value: "86400"
-      - key: GDRIVE_SYNC_SCHEDULER_ENABLED
-        value: "true"
-      - key: GDRIVE_SYNC_SCHEDULER_ERROR_RECOVERY_MAX_RETRIES
-        value: "3"
-      - key: GDRIVE_SYNC_SCHEDULER_ERROR_RECOVERY_RETRY_DELAY_SECONDS
-        value: "30"
-      - key: GDRIVE_SYNC_SCHEDULER_ERROR_RECOVERY_CONTINUE_ON_ERROR
-        value: "true"
-      - key: GDRIVE_SYNC_GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE
-        sync: false
-      - key: GDRIVE_SYNC_GOOGLE_DRIVE_FOLDER_ID
-        sync: false
-      - key: GDRIVE_SYNC_DIFY_API_URL
-        sync: false
-      - key: GDRIVE_SYNC_DIFY_DATASET_ID
-        sync: false
-      - key: GDRIVE_SYNC_DIFY_API_KEY
-        sync: false
