@@ -43,7 +43,7 @@ class DownloadManager:
         # Track downloaded files
         self.downloaded_files: Dict[str, Path] = {}
     
-    def download_file(self, file_data: FileDict) -> Optional[Path]:
+    def download_file(self, file_data: Dict[str, Any]) -> Optional[Path]:
         """
         Download a file from Google Drive.
         
@@ -53,8 +53,18 @@ class DownloadManager:
         Returns:
             Path to the downloaded file or None if download failed.
         """
+        if not file_data:
+            logger.error("Invalid file data: empty dictionary")
+            return None
+            
+        if 'id' not in file_data or 'name' not in file_data:
+            logger.error("Invalid file data: missing required fields (id or name)")
+            return None
+            
         file_id = file_data['id']
         file_name = file_data['name']
+        
+        logger.info(f"Downloading file: {file_name} ({file_id})")
         
         # Create a safe filename
         safe_name = self._create_safe_filename(file_name)

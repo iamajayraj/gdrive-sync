@@ -25,6 +25,8 @@ from src.database.db_manager import DatabaseManager
 from src.drive.change_detector import ChangeDetector
 from src.drive.polling_system import PollingSystem
 from src.drive.download_manager import DownloadManager
+from src.dify.dify_client import DifyClient
+from src.dify.file_uploader import FileUploader
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -77,7 +79,19 @@ def handle_new_file(file: Dict[str, Any]) -> None:
         file_info = file_processor.get_file_info(download_path)
         logger.info(f"Downloaded file: {file_info['name']} ({file_info['size']} bytes)")
         
-        # TODO: Implement Dify API upload
+        # Upload to Dify API if available
+        if file_uploader:
+            logger.info(f"Uploading file to Dify API: {file['name']}")
+            success, response = file_uploader.upload_file(file, download_path)
+            
+            if success:
+                document_id = response.get('id', 'unknown')
+                logger.info(f"File uploaded successfully to Dify API. Document ID: {document_id}")
+            else:
+                error = response.get('error', 'unknown error')
+                logger.error(f"Failed to upload file to Dify API: {error}")
+        else:
+            logger.warning("Dify API integration is disabled. Skipping upload.")
     else:
         logger.error(f"Failed to download file: {file['name']} ({file['id']})")
 
@@ -98,7 +112,19 @@ def handle_modified_file(file: Dict[str, Any]) -> None:
         file_info = file_processor.get_file_info(download_path)
         logger.info(f"Downloaded modified file: {file_info['name']} ({file_info['size']} bytes)")
         
-        # TODO: Implement Dify API upload
+        # Upload to Dify API if available
+        if file_uploader:
+            logger.info(f"Uploading modified file to Dify API: {file['name']}")
+            success, response = file_uploader.upload_file(file, download_path)
+            
+            if success:
+                document_id = response.get('id', 'unknown')
+                logger.info(f"Modified file uploaded successfully to Dify API. Document ID: {document_id}")
+            else:
+                error = response.get('error', 'unknown error')
+                logger.error(f"Failed to upload modified file to Dify API: {error}")
+        else:
+            logger.warning("Dify API integration is disabled. Skipping upload.")
     else:
         logger.error(f"Failed to download modified file: {file['name']} ({file['id']})")
 
@@ -120,7 +146,18 @@ def handle_deleted_file(file: Dict[str, Any]) -> None:
         except Exception as e:
             logger.error(f"Error removing local file {local_path}: {e}")
     
-    # TODO: Implement Dify API deletion if needed
+    # Delete from Dify API if available
+    if file_uploader:
+        logger.info(f"Deleting file from Dify API: {file['id']}")
+        success, response = file_uploader.delete_document(file['id'])
+        
+        if success:
+            logger.info(f"File deleted successfully from Dify API")
+        else:
+            error = response.get('error', 'unknown error')
+            logger.error(f"Failed to delete file from Dify API: {error}")
+    else:
+        logger.warning("Dify API integration is disabled. Skipping deletion.")
 
 
 def handle_poll_complete(
@@ -141,7 +178,7 @@ def handle_poll_complete(
     )
 
 
-def setup_components(config_path: Path) -> Tuple[Config, DatabaseManager, ServiceDriveClient, ChangeDetector, PollingSystem, DownloadManager, FileProcessor]:
+def setup_components(config_path: Path) -> Tuple[Config, DatabaseManager, ServiceDriveClient, ChangeDetector, PollingSystem, DownloadManager, FileProcessor, DifyClient, FileUploader]:
     """Set up application components.
     
     Args:
@@ -156,10 +193,13 @@ def setup_components(config_path: Path) -> Tuple[Config, DatabaseManager, Servic
         - PollingSystem: Polling system for checking changes.
         - DownloadManager: File download manager.
         - FileProcessor: File processor for handling different file types.
+        - DifyClient: Dify API client.
+        - FileUploader: File uploader for Dify API.
         
     Raises:
         FileNotFoundError: If the configuration file is not found.
         RuntimeError: If database initialization or Google Drive connection fails.
+        ValueError: If Dify API configuration is invalid.
     """
     # Load configuration
     if not config_path.exists():
@@ -199,7 +239,24 @@ def setup_components(config_path: Path) -> Tuple[Config, DatabaseManager, Servic
     download_manager = DownloadManager(drive_client, download_dir)
     logger.info(f"Download manager initialized with directory: {download_dir}")
     
-    return config, db_manager, drive_client, change_detector, polling_system, download_manager, file_processor
+    # Initialize Dify client
+    try:
+        dify_client = DifyClient(config)
+        logger.info("Dify API client initialized")
+    except ValueError as e:
+        logger.error(f"Failed to initialize Dify API client: {e}")
+        logger.warning("Dify API integration will be disabled")
+        dify_client = None
+    
+    # Initialize file uploader if Dify client is available
+    if dify_client:
+        file_uploader = FileUploader(dify_client, db_manager)
+        logger.info("File uploader initialized")
+    else:
+        file_uploader = None
+        logger.warning("File uploader disabled due to missing Dify API configuration")
+    
+    return config, db_manager, drive_client, change_detector, polling_system, download_manager, file_processor, dify_client, file_uploader
 
 
 def register_event_handlers(polling_system: PollingSystem) -> None:
@@ -238,23 +295,30 @@ def setup_signal_handlers(polling_system: PollingSystem, db_manager: DatabaseMan
 
 
 # Global variables for file handling components
-download_manager = None
-file_processor = None
+download_manager: Optional[DownloadManager] = None
+file_processor: Optional[FileProcessor] = None
+file_uploader: Optional[FileUploader] = None
+dify_client: Optional[DifyClient] = None
 
 
 def main() -> None:
     """Main entry point for the application."""
-    global download_manager, file_processor
+    global download_manager, file_processor, file_uploader, dify_client
     
     args = parse_arguments()
     
     # Setup logging
-    setup_logger(args.log_level)
+    logger = setup_logger(args.log_level)
+    logger.info(f"Starting Google Drive Sync with log level: {args.log_level}")
     
     try:
         # Set up components
         config_path = Path(args.config)
-        config, db_manager, drive_client, change_detector, polling_system, download_manager, file_processor = setup_components(config_path)
+        if not config_path.exists():
+            logger.error(f"Configuration file not found: {config_path}")
+            sys.exit(1)
+            
+        config, db_manager, drive_client, change_detector, polling_system, download_manager, file_processor, dify_client, file_uploader = setup_components(config_path)
         
         # Register event handlers
         register_event_handlers(polling_system)
