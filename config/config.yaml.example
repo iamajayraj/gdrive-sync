@@ -1,0 +1,40 @@
+# Google Drive Sync Configuration
+
+# Google Drive settings
+google_drive:
+  # Path to the credentials file (will be generated during OAuth2 flow)
+  credentials_file: "config/credentials.json"
+  # Path to the token file (will be generated during OAuth2 flow)
+  token_file: "config/token.json"
+  # The ID of the folder to monitor (can be obtained from the Google Drive URL)
+  folder_id: "your_folder_id_here"
+  # Polling interval in seconds
+  polling_interval: 300  # 5 minutes
+
+# Dify API settings
+dify:
+  # API endpoint
+  api_url: "https://api.dify.ai/v1/datasets/{dataset_id}/document/create-by-file"
+  # Your dataset ID
+  dataset_id: "your_dataset_id_here"
+  # Your API key
+  api_key: "your_api_key_here"
+
+# Database settings
+database:
+  # Path to the SQLite database file
+  path: "data/file_metadata.db"
+
+# Logging settings
+logging:
+  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"
+  # Path to the log file
+  file: "logs/gdrive_sync.log"
+
+# Application settings
+app:
+  # Temporary directory for downloaded files
+  temp_dir: "temp"
+  # Maximum file size to download (in bytes)
+  max_file_size: 104857600  # 100MB
