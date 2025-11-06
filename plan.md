@@ -19,13 +19,13 @@ This project will create a system that monitors a Google Drive folder (and its s
 
 **Testing**: Successfully authenticate with Google Drive API and list files from the target folder.
 
-### 3. File Change Detection System
-- Implement a mechanism to detect new files in Google Drive
-- Implement a mechanism to detect modified files in Google Drive
-- Create a database to track file metadata (ID, name, path, modification time)
-- Design a polling system to check for changes periodically
+### 3. File Change Detection System ✅
+- ✅ Implement a mechanism to detect new files in Google Drive
+- ✅ Implement a mechanism to detect modified files in Google Drive
+- ✅ Create a database to track file metadata (ID, name, path, modification time)
+- ✅ Design a polling system to check for changes periodically
 
-**Testing**: Run the detection system and verify it correctly identifies new and modified files in the Google Drive folder and subfolders.
+**Testing**: ✅ Run the detection system and verify it correctly identifies new and modified files in the Google Drive folder and subfolders.
 
 ### 4. File Download System
 - Implement functionality to download new or modified files from Google Drive
