@@ -24,6 +24,8 @@ dify:
 database:
   # Path to the SQLite database file
   path: "data/file_metadata.db"
+  # Maximum number of sync history records to keep per file
+  max_history_per_file: 100
 
 # Logging settings
 logging:
