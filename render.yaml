@@ -3,5 +3,4 @@ services:
     name: gdrive-sync
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: "python src/main.py"
     plan: free
