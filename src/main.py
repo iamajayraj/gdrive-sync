@@ -11,6 +11,8 @@ import time
 import signal
 import logging
 import argparse
+import ssl
+import certifi
 from pathlib import Path
 from typing import Tuple, List, Dict, Any, Optional
 
@@ -387,6 +389,33 @@ def main() -> None:
     logger = setup_logger(args.log_level)
     logger.info(f"Starting Google Drive Sync with log level: {args.log_level}")
     
+    # Apply SSL fixes
+    try:
+        import ssl
+        import certifi
+        
+        # Get the path to certifi's certificate bundle
+        cert_path = certifi.where()
+        logger.info(f"Using SSL certificates from: {cert_path}")
+        
+        # Set environment variables to use certifi's certificate bundle
+        os.environ['REQUESTS_CA_BUNDLE'] = cert_path
+        os.environ['SSL_CERT_FILE'] = cert_path
+        
+        # Create a custom SSL context with modern protocols
+        ssl_context = ssl.create_default_context()
+        ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+        ssl_context.check_hostname = True
+        ssl_context.verify_mode = ssl.CERT_REQUIRED
+        
+        # Set as default SSL context
+        ssl._create_default_https_context = lambda: ssl_context
+        
+        logger.info("SSL security configuration applied")
+    except Exception as e:
+        logger.warning(f"Failed to apply SSL fixes: {e}. Continuing with default SSL configuration.")
+    
+    
     try:
         # Set up components
         config_path = Path(args.config)
@@ -464,7 +493,18 @@ def main() -> None:
                 )
                 
                 if success:
-                    new_files, modified_files, deleted_files = result
+                    if result is None:
+                        # Extra protection in case poll_now still returns None
+                        logger.warning("Polling returned None, treating as empty results")
+                        new_files, modified_files, deleted_files = [], [], []
+                    else:
+                        try:
+                            new_files, modified_files, deleted_files = result
+                        except (TypeError, ValueError) as e:
+                            logger.error(f"Error processing polling results: {e}")
+                            logger.debug(f"Received result: {result}")
+                            return
+                    
                     logger.info(
                         f"Poll complete: {len(new_files)} new, {len(modified_files)} modified, "
                         f"{len(deleted_files)} deleted"

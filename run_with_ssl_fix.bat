@@ -1,0 +1,9 @@
+@echo off
+echo Installing required packages for SSL fix...
+pip install certifi==2023.7.22 pyopenssl==23.2.0 httplib2==0.22.0
+
+echo Running SSL fix...
+python ssl_fix.py
+
+echo Starting Google Drive Sync application...
+python src/main.py %*
